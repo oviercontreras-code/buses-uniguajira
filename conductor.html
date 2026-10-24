@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conductor - Buses de la universidad</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#fbf8f2;--card:#fff;--soft:#f3efe6;--ink:#1f2a30;--mut:#6a747a;--line:#ece6d8;--teal:#00a4b3;--azulb:#10a0c9;--oro:#f8b427;--nar:#f85731;--rojo:#d9423a;--ok:#2f855a;--warn:#c27c0e;--bad:#c93a2e}
+@media(prefers-color-scheme:dark){:root{--bg:#12181b;--card:#1a2226;--soft:#222c31;--ink:#eef2f3;--mut:#9aa7ad;--line:#2a353a;--ok:#48bb78;--warn:#f0b429;--bad:#f87171}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;font:16px/1.5 Futura,"Futura PT",Jost,"Century Gothic","Trebuchet MS",system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+main{max-width:480px;margin:0 auto;padding:0 16px 32px;display:flex;flex-direction:column;gap:14px}
+.stripe{height:6px;margin:0 -16px 6px;background:linear-gradient(90deg,var(--azulb) 0 25%,var(--oro) 25% 50%,var(--nar) 50% 75%,var(--rojo) 75%)}
+h1{font-size:26px;margin:4px 0 0;font-weight:600}
+h2{font-size:15px;margin:0 0 8px;font-weight:600}
+.hint{color:var(--mut);margin:0;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.status{border-left:6px solid var(--mut)}
+.status b{display:block;font-size:18px;font-weight:600}
+.status.ok{border-left-color:var(--ok)}.status.warn{border-left-color:var(--warn)}.status.bad{border-left-color:var(--bad)}
+label{display:block;font-size:13px;color:var(--mut);margin-bottom:10px}
+input,select,button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;width:100%}
+button{cursor:pointer;font-weight:600}
+button.pri{background:var(--teal);border-color:var(--teal);color:#fff;min-height:64px;font-size:18px}
+button.pri.stop{background:var(--bad);border-color:var(--bad)}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
+.seg button{padding:10px 6px;font-size:14px}
+.seg button[aria-pressed=true]{background:var(--teal);border-color:var(--teal);color:#fff}
+dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0}
+dt{color:var(--mut)}dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.lnk{background:none;border:0;color:var(--teal);text-decoration:underline;width:auto;padding:4px;align-self:flex-start}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+  <div class="stripe"></div>
+  <header><h1>Conductor</h1><p class="hint">Ruta Calle 15 · Transporte universitario</p></header>
+
+  <section id="login" class="card">
+    <h2>Ingresar</h2>
+    <label>Correo<input id="em" type="email" autocomplete="username" inputmode="email"></label>
+    <label>Contraseña<input id="pw" type="password" autocomplete="current-password"></label>
+    <button id="in" class="pri">Entrar</button>
+    <p id="lm" class="hint" style="margin-top:8px"></p>
+  </section>
+
+  <section id="panel" hidden style="display:flex;flex-direction:column;gap:14px">
+    <div id="stc" class="card status"><b id="stt">Listo para iniciar</b><span id="stm" class="hint">Pulsa el botón al salir del estacionamiento.</span></div>
+    <button id="go" class="pri">Iniciar recorrido</button>
+    <div class="card">
+      <h2>Estado del bus</h2>
+      <div class="seg" role="group" aria-label="Estado del bus">
+        <button data-e="en_servicio" aria-pressed="true">En servicio</button>
+        <button data-e="novedad" aria-pressed="false">Con novedad</button>
+        <button data-e="fuera" aria-pressed="false">Fuera de servicio</button>
+      </div>
+      <label id="nvl" hidden>Tipo de novedad
+        <select id="nv"><option>Tráfico pesado</option><option>Falla mecánica</option><option>Desvío temporal</option><option>Retraso por otra causa</option></select>
+      </label>
+    </div>
+    <div class="card">
+      <h2>Señal GPS</h2>
+      <dl>
+        <dt>Precisión</dt><dd id="acc">—</dd>
+        <dt>Velocidad</dt><dd id="spd">—</dd>
+        <dt>Envíos</dt><dd id="snt">0</dd>
+      </dl>
+    </div>
+    <p class="hint">Mantén esta pantalla abierta y el celular cargando. Tu ubicación se comparte solo mientras el recorrido está activo.</p>
+    <button id="out" class="lnk">Cerrar sesión</button>
+  </section>
+</main>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const ok=typeof firebase!=="undefined"&&window.FIREBASE_CONFIG&&FIREBASE_CONFIG.apiKey;
+let auth,db,ref,TS,watch=null,wake=null,running=false,first=true,estado="en_servicio",last=0,sent=0,iniKey="",iniS=0,hasFix=false;
+if(!ok){$("lm").textContent="Falta pegar los datos de tu proyecto Firebase en el archivo firebase-config.js.";$("in").disabled=true}
+else{
+  firebase.initializeApp(FIREBASE_CONFIG);auth=firebase.auth();db=firebase.database();ref=db.ref("buses/calle15");TS=firebase.database.ServerValue.TIMESTAMP;
+  auth.onAuthStateChanged(u=>{$("login").hidden=!!u;$("panel").hidden=!u})
+}
+const secDay=()=>{const d=new Date();return d.getHours()*3600+d.getMinutes()*60+d.getSeconds()};
+function say(t,m,k){$("stt").textContent=t;$("stm").textContent=m||"";$("stc").className="card status "+(k||"")}
+$("in").onclick=async()=>{
+  $("lm").textContent="Entrando...";
+  try{await auth.signInWithEmailAndPassword($("em").value.trim(),$("pw").value);$("lm").textContent=""}
+  catch(e){$("lm").textContent="No se pudo entrar. Revisa el correo y la contraseña."}
+};
+$("out").onclick=()=>{if(running)stop();auth.signOut()};
+async function lock(){try{if("wakeLock" in navigator)wake=await navigator.wakeLock.request("screen")}catch(e){}}
+document.addEventListener("visibilitychange",()=>{if(running&&document.visibilityState==="visible")lock()});
+
+function payload(c){
+  return{lat:+c.latitude.toFixed(6),lng:+c.longitude.toFixed(6),acc:Math.round(c.accuracy),
+    speed:c.speed!=null?+(c.speed*3.6).toFixed(1):null,heading:(c.heading!=null&&!isNaN(c.heading))?Math.round(c.heading):null,
+    estado,nota:estado==="novedad"?$("nv").value:"",ts:TS};
+}
+function onPos(p){
+  const c=p.coords,now=Date.now();
+  $("acc").textContent="±"+Math.round(c.accuracy)+" m";
+  $("spd").textContent=c.speed!=null?Math.round(c.speed*3.6)+" km/h":"—";
+  hasFix=true;
+  if(now-last<4000)return;
+  last=now;
+  const d=payload(c);
+  const job=first?(first=false,ref.set(Object.assign(d,{ini_s:iniS,ini_ts:TS}))):ref.update(d);
+  job.then(()=>{sent++;$("snt").textContent=sent;say("Recorrido en curso","Enviando tu ubicación cada pocos segundos.","ok")})
+     .catch(()=>say("No se pudo enviar la ubicación","Revisa tu internet y tu sesión.","bad"));
+  db.ref("recorridos/"+iniKey).push({lat:d.lat,lng:d.lng,v:d.speed,e:estado,t:TS});
+}
+function onErr(e){say("No se puede leer el GPS",e.code===1?"Permite el acceso a la ubicación en el navegador.":"Intenta de nuevo al aire libre.","bad")}
+function start(){
+  if(!navigator.geolocation){say("Este celular no permite GPS en el navegador","","bad");return}
+  running=true;first=true;hasFix=false;sent=0;last=0;iniKey=String(Date.now());iniS=secDay();$("snt").textContent="0";
+  $("go").textContent="Finalizar recorrido";$("go").classList.add("stop");
+  lock();say("Buscando señal GPS","Si no aparece, sal a un lugar abierto.","warn");
+  watch=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:2000,timeout:20000});
+}
+function stop(){
+  running=false;
+  if(watch!=null){navigator.geolocation.clearWatch(watch);watch=null}
+  if(wake){try{wake.release()}catch(e){}wake=null}
+  if(hasFix)ref.update({estado:"fuera",ts:TS,fin_ts:TS}).catch(()=>{});
+  $("go").textContent="Iniciar recorrido";$("go").classList.remove("stop");
+  say("Recorrido finalizado","Los estudiantes ven el bus como fuera de servicio.","");
+}
+$("go").onclick=()=>running?stop():start();
+document.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>{
+  estado=b.dataset.e;
+  document.querySelectorAll("[data-e]").forEach(x=>x.setAttribute("aria-pressed",x===b));
+  $("nvl").hidden=estado!=="novedad";
+  if(running&&hasFix)ref.update({estado,nota:estado==="novedad"?$("nv").value:"",ts:TS}).catch(()=>{});
+});
+$("nv").onchange=()=>{if(running&&hasFix&&estado==="novedad")ref.update({nota:$("nv").value,ts:TS}).catch(()=>{})};
+</script>
+</body>
+</html>
